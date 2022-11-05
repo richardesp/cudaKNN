@@ -1,10 +1,4 @@
 /snap/clion/209/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/snap/clion/209/bin/ninja/linux/ninja -G Ninja -S /home/ricardo/CLionProjects/cudaKNN -B /home/ricardo/CLionProjects/cudaKNN/cmake-build-debug
--- The CUDA compiler identification is NVIDIA 11.2.152
--- Detecting CUDA compiler ABI info
--- Detecting CUDA compiler ABI info - done
--- Check for working CUDA compiler: /usr/bin/nvcc - skipped
--- Detecting CUDA compile features
--- Detecting CUDA compile features - done
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /home/ricardo/CLionProjects/cudaKNN/cmake-build-debug

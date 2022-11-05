@@ -1,7 +1,13 @@
 #include <iostream>
 #include <cuda_runtime.h>
+#include "include/Dataset.h"
 
-int main() {
+#define TOTAL_BLOCKS 1
+#define TOTAL_THREADS_AXIS_X 1024
+#define TOTAL_THREADS_AXIS_Y 1024
+#define TOTAL_THREADS_AXIS_Z 64
+
+int main(int argc, char **argv) {
     int deviceCount = 0;
 
     cudaGetDeviceCount(&deviceCount);
@@ -11,8 +17,8 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    int best_device = 0;
-    cudaDeviceProp best_device_prop;
+    int bestDevice = 0;
+    cudaDeviceProp bestDeviceProp;
 
     for (int i = 0; i < deviceCount; i++) {
 
@@ -39,16 +45,54 @@ int main() {
         std::cout << "  Kernel execution timeout: " << (deviceProp.kernelExecTimeoutEnabled ? "Yes" : "No")
                   << std::endl;
 
-        if (i == 0 || best_device_prop.totalGlobalMem < deviceProp.totalGlobalMem) {
-            best_device = i;
-            best_device_prop = deviceProp;
+        if (i == 0 || bestDeviceProp.totalGlobalMem < deviceProp.totalGlobalMem) {
+            bestDevice = i;
+            bestDeviceProp = deviceProp;
         }
 
     }
 
     std::cout << "\n################################################\n" << std::endl;
-    std::cout << "Best device found: " << best_device_prop.name << std::endl;
+    std::cout << "Best device found: " << bestDeviceProp.name << std::endl;
 
+    Dataset dataset(argv[1]);
+
+    long double total_points = dataset.getTotalPoints();
+
+    dim3 gridDimension(TOTAL_BLOCKS, 1, 1);
+    dim3 blockDimension(1, 1, 1);
+
+    // Allocating the number of threads to be used in the kernel
+    if (TOTAL_THREADS_AXIS_X > total_points) {
+        blockDimension.x = total_points;
+
+    } else {
+        blockDimension.x = TOTAL_THREADS_AXIS_X;
+
+        // It is desirable to have blocks left over
+        int n_dim_axis_y = ceil(total_points / TOTAL_THREADS_AXIS_X);
+
+        if (n_dim_axis_y > TOTAL_THREADS_AXIS_Y) {
+            blockDimension.y = TOTAL_THREADS_AXIS_Y;
+            int n_dim_axis_z = ceil(n_dim_axis_y / TOTAL_THREADS_AXIS_Y);
+
+            if (n_dim_axis_z > TOTAL_THREADS_AXIS_Z) {
+                blockDimension.z = TOTAL_THREADS_AXIS_Z;
+
+                // We must increase the block size
+                blockDimension.x = ceil(total_points / (TOTAL_THREADS_AXIS_Y * TOTAL_THREADS_AXIS_Z));
+            } else {
+                blockDimension.z = n_dim_axis_z;
+            }
+        } else {
+            blockDimension.y = n_dim_axis_y;
+        }
+    }
+
+    // Print block dimension
+    std::cout << "Block dimension for the specified dataset: " << blockDimension.x << " " << blockDimension.y << " "
+              << blockDimension.z
+              << std::endl;
 
     return EXIT_SUCCESS;
 }

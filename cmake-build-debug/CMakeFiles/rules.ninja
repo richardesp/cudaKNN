@@ -25,7 +25,7 @@ rule CUDA_COMPILER__cudaKNN_Debug
 # Rule for linking CUDA executable.
 
 rule CUDA_EXECUTABLE_DEVICE_LINKER__cudaKNN_Debug
-  command = /usr/bin/nvcc -forward-unknown-to-host-compiler $LANGUAGE_COMPILE_FLAGS $LINK_FLAGS -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink $in -o $TARGET_FILE $LINK_PATH $LINK_LIBRARIES
+  command = /usr/bin/nvcc -forward-unknown-to-host-compiler $LANGUAGE_COMPILE_FLAGS $LINK_FLAGS -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink $in -o $TARGET_FILE $LINK_PATH $LINK_LIBRARIES -L"/lib/x86_64-linux-gnu"
   description = Linking CUDA executable $TARGET_FILE
   restat = $RESTAT
 
