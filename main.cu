@@ -5,9 +5,20 @@ int main() {
     int deviceCount = 0;
 
     cudaGetDeviceCount(&deviceCount);
+
+    if (deviceCount == 0) { // Throw a runtime exception
+        std::cerr << "No CUDA devices found" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    int best_device = 0;
+    cudaDeviceProp best_device_prop;
+
     for (int i = 0; i < deviceCount; i++) {
+
         cudaDeviceProp deviceProp;
         cudaGetDeviceProperties(&deviceProp, i);
+
         std::cout << "Device " << i << ": " << deviceProp.name << std::endl;
         std::cout << "  Compute capability: " << deviceProp.major << "." << deviceProp.minor << std::endl;
         std::cout << "  Global memory: " << deviceProp.totalGlobalMem << std::endl;
@@ -27,6 +38,17 @@ int main() {
         std::cout << "  Number of multiprocessors: " << deviceProp.multiProcessorCount << std::endl;
         std::cout << "  Kernel execution timeout: " << (deviceProp.kernelExecTimeoutEnabled ? "Yes" : "No")
                   << std::endl;
+
+        if (i == 0 || best_device_prop.totalGlobalMem < deviceProp.totalGlobalMem) {
+            best_device = i;
+            best_device_prop = deviceProp;
+        }
+
     }
-    return 0;
+
+    std::cout << "\n################################################\n" << std::endl;
+    std::cout << "Best device found: " << best_device_prop.name << std::endl;
+
+
+    return EXIT_SUCCESS;
 }
