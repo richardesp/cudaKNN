@@ -12,8 +12,8 @@ int main(int argc, char **argv) {
 
     cudaGetDeviceCount(&deviceCount);
 
-    if (deviceCount == 0) { // Throw a runtime exception
-        std::cerr << "No CUDA devices found" << std::endl;
+    if (deviceCount == 0) {
+        fprintf(stderr, "There is no device supporting CUDA\n");
         return EXIT_FAILURE;
     }
 
@@ -25,25 +25,25 @@ int main(int argc, char **argv) {
         cudaDeviceProp deviceProp;
         cudaGetDeviceProperties(&deviceProp, i);
 
-        std::cout << "Device " << i << ": " << deviceProp.name << std::endl;
-        std::cout << "  Compute capability: " << deviceProp.major << "." << deviceProp.minor << std::endl;
-        std::cout << "  Global memory: " << deviceProp.totalGlobalMem << std::endl;
-        std::cout << "  Shared memory per block: " << deviceProp.sharedMemPerBlock << std::endl;
-        std::cout << "  Registers per block: " << deviceProp.regsPerBlock << std::endl;
-        std::cout << "  Warp size: " << deviceProp.warpSize << std::endl;
-        std::cout << "  Memory pitch: " << deviceProp.memPitch << std::endl;
-        std::cout << "  Max threads per block: " << deviceProp.maxThreadsPerBlock << std::endl;
-        std::cout << "  Max thread dimensions: " << deviceProp.maxThreadsDim[0] << " " << deviceProp.maxThreadsDim[1]
-                  << " " << deviceProp.maxThreadsDim[2] << std::endl;
-        std::cout << "  Max grid dimensions: " << deviceProp.maxGridSize[0] << " " << deviceProp.maxGridSize[1] << " "
-                  << deviceProp.maxGridSize[2] << std::endl;
-        std::cout << "  Clock rate: " << deviceProp.clockRate << std::endl;
-        std::cout << "  Total constant memory: " << deviceProp.totalConstMem << std::endl;
-        std::cout << "  Texture alignment: " << deviceProp.textureAlignment << std::endl;
-        std::cout << "  Concurrent copy and execution: " << (deviceProp.deviceOverlap ? "Yes" : "No") << std::endl;
-        std::cout << "  Number of multiprocessors: " << deviceProp.multiProcessorCount << std::endl;
-        std::cout << "  Kernel execution timeout: " << (deviceProp.kernelExecTimeoutEnabled ? "Yes" : "No")
-                  << std::endl;
+        fprintf(stdout, "\tdevice %d: %s\n", i, deviceProp.name);
+        fprintf(stdout, "\tCompute capability: %d.%d\n", deviceProp.major, deviceProp.minor);
+        fprintf(stdout, "\tGlobal memory: %ld\n", deviceProp.totalGlobalMem);
+        fprintf(stdout, "\tShared memory per block: %ld\n", deviceProp.sharedMemPerBlock);
+        fprintf(stdout, "\tRegisters per block: %d\n", deviceProp.regsPerBlock);
+        fprintf(stdout, "\tWarp size: %d\n", deviceProp.warpSize);
+        fprintf(stdout, "\tMemory pitch: %ld\n", deviceProp.memPitch);
+        fprintf(stdout, "\tMax threads per block: %d\n", deviceProp.maxThreadsPerBlock);
+        fprintf(stdout, "\tMax threads dimensions: (%d, %d, %d)\n", deviceProp.maxThreadsDim[0],
+                deviceProp.maxThreadsDim[1], deviceProp.maxThreadsDim[2]);
+        fprintf(stdout, "\tMax grid dimensions: (%d, %d, %d)\n", deviceProp.maxGridSize[0], deviceProp.maxGridSize[1],
+                deviceProp.maxGridSize[2]);
+        fprintf(stdout, "\tClock rate: %d\n", deviceProp.clockRate);
+        fprintf(stdout, "\tTotal constant memory: %ld\n", deviceProp.totalConstMem);
+        fprintf(stdout, "\tTexture alignment: %ld\n", deviceProp.textureAlignment);
+        fprintf(stdout, "\tConcurrent copy and execution: %s\n", deviceProp.deviceOverlap ? "Yes" : "No");
+        fprintf(stdout, "\tNumber of multiprocessors: %d\n", deviceProp.multiProcessorCount);
+        fprintf(stdout, "\tKernel execution timeout: %s\n", deviceProp.kernelExecTimeoutEnabled ? "Yes" : "No");
+        fprintf(stdout, "\tIntegrated: %s\n", deviceProp.integrated ? "Yes" : "No");
 
         if (i == 0 || bestDeviceProp.totalGlobalMem < deviceProp.totalGlobalMem) {
             bestDevice = i;
@@ -52,8 +52,8 @@ int main(int argc, char **argv) {
 
     }
 
-    std::cout << "\n################################################\n" << std::endl;
-    std::cout << "Best device found: " << bestDeviceProp.name << std::endl;
+    fprintf(stdout, "\n################################################\n");
+    fprintf(stdout, "Best device: %s (%d)\n", bestDeviceProp.name, bestDevice);
 
     Dataset dataset(argv[1]);
 
@@ -90,9 +90,7 @@ int main(int argc, char **argv) {
     }
 
     // Print block dimension
-    std::cout << "Block dimension for the specified dataset: " << blockDimension.x << " " << blockDimension.y << " "
-              << blockDimension.z
-              << std::endl;
+    fprintf(stdout, "Block dimension: (%d, %d, %d)\n", blockDimension.x, blockDimension.y, blockDimension.z);
 
     return EXIT_SUCCESS;
 }
