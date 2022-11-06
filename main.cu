@@ -1,11 +1,10 @@
-#include <iostream>
-#include <cuda_runtime.h>
+#include <cstdio>
+#include <cmath>
 #include "include/Dataset.h"
+#include "include/cuda/Lock.h"
+#include "include/cuda/cudaKNN.cu"
+#include "include/Point.h"
 
-#define TOTAL_BLOCKS 1
-#define TOTAL_THREADS_AXIS_X 1024
-#define TOTAL_THREADS_AXIS_Y 1024
-#define TOTAL_THREADS_AXIS_Z 64
 
 int main(int argc, char **argv) {
     int deviceCount = 0;
@@ -55,42 +54,100 @@ int main(int argc, char **argv) {
     fprintf(stdout, "\n################################################\n");
     fprintf(stdout, "Best device: %s (%d)\n", bestDeviceProp.name, bestDevice);
 
-    Dataset dataset(argv[1]);
+    cudaError_t cudaStatus = cudaSetDevice(bestDevice);
 
-    long double total_points = dataset.getTotalPoints();
-
-    dim3 gridDimension(TOTAL_BLOCKS, 1, 1);
-    dim3 blockDimension(1, 1, 1);
-
-    // Allocating the number of threads to be used in the kernel
-    if (TOTAL_THREADS_AXIS_X > total_points) {
-        blockDimension.x = total_points;
-
-    } else {
-        blockDimension.x = TOTAL_THREADS_AXIS_X;
-
-        // It is desirable to have blocks left over
-        int n_dim_axis_y = ceil(total_points / TOTAL_THREADS_AXIS_X);
-
-        if (n_dim_axis_y > TOTAL_THREADS_AXIS_Y) {
-            blockDimension.y = TOTAL_THREADS_AXIS_Y;
-            int n_dim_axis_z = ceil(n_dim_axis_y / TOTAL_THREADS_AXIS_Y);
-
-            if (n_dim_axis_z > TOTAL_THREADS_AXIS_Z) {
-                blockDimension.z = TOTAL_THREADS_AXIS_Z;
-
-                // We must increase the block size
-                blockDimension.x = ceil(total_points / (TOTAL_THREADS_AXIS_Y * TOTAL_THREADS_AXIS_Z));
-            } else {
-                blockDimension.z = n_dim_axis_z;
-            }
-        } else {
-            blockDimension.y = n_dim_axis_y;
-        }
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaSetDevice failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
     }
 
-    // Print block dimension
-    fprintf(stdout, "Block dimension: (%d, %d, %d)\n", blockDimension.x, blockDimension.y, blockDimension.z);
+    size_t *host_k = (size_t *) malloc(sizeof(size_t));
+    size_t *dev_k = nullptr;
+    *host_k = 5;
+
+    Dataset dataset(argv[1]);
+
+    size_t *host_totalPoints = (size_t *) malloc(sizeof(size_t));
+    size_t *dev_totalPoints = nullptr;
+
+    *host_totalPoints = dataset.getNPoints();
+
+    if (*host_totalPoints > MAX_GRID_DIM_X) {
+        fprintf(stderr, "The number of points is too big for the grid size\n");
+        return EXIT_FAILURE;
+    }
+
+    Point *host_points = dataset.getPoints();
+    Point *dev_points = nullptr;
+
+    fprintf(stdout, "Total points: %ld.\nResulting points array for training:\n", *host_totalPoints);
+    for (size_t i = 0; i < *host_totalPoints; ++i) {
+        fprintf(stdout, "%zu: %f %f %f\n", host_points[i].getId(), host_points[i].getX(), host_points[i].getY(),
+                host_points[i].getZ());
+    }
+
+    dim3 gpuBlocks(TOTAL_BLOCKS, 1, 1);
+    dim3 gpuThreads(*host_totalPoints, 1, 1);
+
+    fprintf(stdout, "################################################\n");
+    fprintf(stdout, "GPU blocks: %d, GPU threads: %d\n", gpuBlocks.x, gpuThreads.x);
+
+    // Allocating the points in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_points, *host_totalPoints * sizeof(Point));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Allocating the number of points in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_totalPoints, sizeof(size_t));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Allocating the K in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_k, sizeof(size_t));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Copying the points to the GPU
+    cudaStatus = cudaMemcpy(dev_points, host_points, *host_totalPoints * sizeof(Point), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Copying the number of points to the GPU
+    cudaStatus = cudaMemcpy(dev_totalPoints, host_totalPoints, sizeof(size_t), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Copying the K to the GPU
+    cudaStatus = cudaMemcpy(dev_k, host_k, sizeof(size_t), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    printf("Starting the kernel...\n");
+
+    // Creating a lock
+    Lock lock;
+
+    // Starting the kernel
+    cudaKNN<<<*host_totalPoints, 1>>>(dev_points, dev_totalPoints, dev_k, lock);
+
 
     return EXIT_SUCCESS;
 }

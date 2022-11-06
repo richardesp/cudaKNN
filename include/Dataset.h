@@ -8,39 +8,42 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <iostream>
+#include <sstream>
+#include "Point.h"
 
 class Dataset {
 private:
-    long long int totalPoints;
-    long long int totalDimensions;
-    std::vector<std::vector<long double>> points;
+    Point *points;
+    size_t nPoints{};
 
 public:
-    Dataset(std::string filePath) {
-        std::ifstream file(filePath);
+    explicit Dataset(const std::string& path) {
+        std::ifstream file(path);
 
         if (!file.is_open()) {
-            std::cerr << "Error opening file: " << filePath << std::endl;
+            fprintf(stderr, "Error opening file %s", path.c_str());
             exit(EXIT_FAILURE);
         }
 
-        file >> totalPoints;
+        file >> this->nPoints;
 
-        std::string line;
-        while (std::getline(file, line)) {
-            std::cout << line << std::endl;
+        this->points = (Point *) malloc(nPoints * sizeof(Point));
+
+        for (size_t index = 0; index < this->nPoints; ++index) {
+            file >> this->points[index];
+            this->points[index].setId((int) index);
         }
-        file.close();
-
     }
 
-    long long int getTotalPoints() {
-        return totalPoints;
+    [[nodiscard]] size_t getNPoints() const {
+        return nPoints;
     }
 
-    long long int getTotalDimensions() {
-        return totalDimensions;
+    [[nodiscard]] Point *getPoints() const {
+        return points;
     }
+
 };
 
 #endif //CUDAKNN_DATASET_H

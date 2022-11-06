@@ -26,7 +26,7 @@ struct Lock {
     }
 
     ~Lock(void) {
-//cudaFree(mutex);
+        //cudaFree(mutex);
         //printf("destructor\n");
     }
 
