@@ -77,6 +77,11 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    DistanceType *host_distanceType = (DistanceType *) malloc(sizeof(DistanceType));
+    DistanceType *dev_distanceType = nullptr;
+
+    *host_distanceType = EUCLIDEAN; // This must be corrected
+
     Point *host_points = dataset.getPoints();
     Point *dev_points = nullptr;
 
@@ -94,6 +99,14 @@ int main(int argc, char **argv) {
 
     // Allocating the points in the GPU
     cudaStatus = cudaMalloc((void **) &dev_points, *host_totalPoints * sizeof(Point));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Allocating the distance type in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_distanceType, sizeof(DistanceType));
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -132,8 +145,50 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    // Copying the distance type to the GPU
+    cudaStatus = cudaMemcpy(dev_distanceType, host_distanceType, sizeof(DistanceType), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
     // Copying the K to the GPU
     cudaStatus = cudaMemcpy(dev_k, host_k, sizeof(size_t), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Creating the distance array into the GPU memory
+    double *dev_distances = nullptr;
+
+    cudaStatus = cudaMalloc((void **) &dev_distances, *host_totalPoints * sizeof(double));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Creating the query point
+    Point *host_queryPoint = (Point *) malloc(sizeof(Point));
+    Point *dev_queryPoint = nullptr;
+
+    host_queryPoint->x = 3.0;
+    host_queryPoint->y = 4.0;
+    host_queryPoint->z = 5.0;
+
+    // Allocating the query point in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_queryPoint, sizeof(Point));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Copying the query point to the GPU
+    cudaStatus = cudaMemcpy(dev_queryPoint, host_queryPoint, sizeof(Point), cudaMemcpyHostToDevice);
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -146,7 +201,7 @@ int main(int argc, char **argv) {
     Lock lock;
 
     // Starting the kernel
-    cudaKNN<<<*host_totalPoints, 1>>>(dev_points, dev_totalPoints, dev_k, lock);
+    cudaKNNPredict<<<gpuThreads, gpuBlocks>>>(dev_points, dev_totalPoints, dev_k, dev_distanceType, dev_distances, dev_queryPoint, lock);
 
 
     return EXIT_SUCCESS;

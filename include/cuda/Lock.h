@@ -20,7 +20,12 @@ struct Lock {
 
     Lock(void) {
         int state = 0;
-        cudaMalloc((void **) &mutex, sizeof(int));
+        cudaError_t err = cudaMalloc((void **) &mutex, sizeof(int));
+        gpuErrchk(err);
+
+        err = cudaMalloc((void **) &mutex, sizeof(int));
+        gpuErrchk(err);
+
         cudaMemcpy(mutex, &state, sizeof(int), cudaMemcpyHostToDevice);
         //printf("constructor, lock pointer: %p\n", mutex);
     }
