@@ -2,8 +2,9 @@
 #include <cmath>
 #include "include/Dataset.h"
 #include "include/cuda/Lock.h"
-#include "include/cuda/cudaKNN.cu"
+#include "include/cuda/cudaKNN.cuh"
 #include "include/Point.h"
+#include "include/Label.h"
 
 
 int main(int argc, char **argv) {
@@ -70,7 +71,11 @@ int main(int argc, char **argv) {
     size_t *host_totalPoints = (size_t *) malloc(sizeof(size_t));
     size_t *dev_totalPoints = nullptr;
 
+    size_t *host_totalLabels = (size_t *) malloc(sizeof(size_t));
+    size_t *dev_totalLabels = nullptr;
+
     *host_totalPoints = dataset.getNPoints();
+    *host_totalLabels = dataset.getNLabels();
 
     if (*host_totalPoints > MAX_GRID_DIM_X) {
         fprintf(stderr, "The number of points is too big for the grid size\n");
@@ -85,10 +90,14 @@ int main(int argc, char **argv) {
     Point *host_points = dataset.getPoints();
     Point *dev_points = nullptr;
 
+    size_t *host_labels = dataset.getLabels();
+    size_t *dev_labels = nullptr;
+
     fprintf(stdout, "Total points: %ld.\nResulting points array for training:\n", *host_totalPoints);
     for (size_t i = 0; i < *host_totalPoints; ++i) {
-        fprintf(stdout, "%zu: %f %f %f\n", host_points[i].getId(), host_points[i].getX(), host_points[i].getY(),
-                host_points[i].getZ());
+        fprintf(stdout, "%zu: %f %f %f. Label: %zu\n", host_points[i].getId(), host_points[i].getX(),
+                host_points[i].getY(),
+                host_points[i].getZ(), host_labels[i]);
     }
 
     dim3 gpuBlocks(TOTAL_BLOCKS, 1, 1);
@@ -121,6 +130,22 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    // Allocating the number of labels in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_totalLabels, sizeof(size_t));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Allocating the labels in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_labels, *host_totalPoints * sizeof(size_t));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
     // Allocating the K in the GPU
     cudaStatus = cudaMalloc((void **) &dev_k, sizeof(size_t));
 
@@ -137,8 +162,24 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    // Copying the labels to the GPU
+    cudaStatus = cudaMemcpy(dev_labels, host_labels, *host_totalPoints * sizeof(size_t), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
     // Copying the number of points to the GPU
     cudaStatus = cudaMemcpy(dev_totalPoints, host_totalPoints, sizeof(size_t), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Copying the number of labels to the GPU
+    cudaStatus = cudaMemcpy(dev_totalLabels, host_totalLabels, sizeof(size_t), cudaMemcpyHostToDevice);
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -195,14 +236,73 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    Label *host_frequencyLabels = (Label *) malloc(*host_totalLabels * sizeof(Label));
+
+    // Initialize the frequency labels
+    for (size_t i = 0; i < *host_totalLabels; i++) {
+        host_frequencyLabels[i].label = i;
+        host_frequencyLabels[i].frequency = 0;
+    }
+
+    // Shared flattened matrix for count the frequency of each label
+    Label *dev_frequencyLabels = nullptr;
+    cudaMalloc((void **) &dev_frequencyLabels, *host_k * sizeof(Label));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Copying the frequency labels to the GPU
+
+    cudaStatus = cudaMemcpy(dev_frequencyLabels, host_frequencyLabels, *host_k * sizeof(Label),
+                            cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
     printf("Starting the kernel...\n");
 
     // Creating a lock
     Lock lock;
 
-    // Starting the kernel
-    cudaKNNPredict<<<gpuThreads, gpuBlocks>>>(dev_points, dev_totalPoints, dev_k, dev_distanceType, dev_distances, dev_queryPoint, lock);
+    // Creating the timer
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
+    // Starting the kernel
+    cudaEventRecord(start);
+    knn::predict<<<*host_totalPoints, 1>>>(dev_points, dev_labels, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
+            dev_queryPoint, dev_frequencyLabels, lock);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float miliseconds = 0;
+    cudaEventElapsedTime(&miliseconds, start, stop);
+    printf("Kernel finished. Elapsed time: %f ms\n",miliseconds);
+    fprintf(stdout, "################################################\n");
+
+    // Memcpy the distances to the host
+    double *host_distances = (double *) malloc(*host_totalPoints * sizeof(double));
+    cudaMemcpy(host_distances, dev_distances, *host_totalPoints * sizeof(double), cudaMemcpyDeviceToHost);
+
+    // Memcpy the points array to the host
+    cudaMemcpy(host_points, dev_points, *host_totalPoints * sizeof(Point), cudaMemcpyDeviceToHost);
+
+    // Printing the distances
+    fprintf(stdout, "Distances:\n");
+    for (size_t i = 0; i < *host_totalPoints; ++i) {
+        fprintf(stdout, "%zu: %f\n", i, host_distances[i]);
+    }
+
+    // Printing the points
+    fprintf(stdout, "Points:\n");
+    for (size_t i = 0; i < *host_totalPoints; ++i) {
+        fprintf(stdout, "%zu: (%f, %f, %f)\n", i, host_points[i].x, host_points[i].y, host_points[i].z);
+    }
 
     return EXIT_SUCCESS;
 }

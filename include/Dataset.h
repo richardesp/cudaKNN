@@ -15,10 +15,12 @@
 class Dataset {
 private:
     Point *points;
+    size_t *labels;
     size_t nPoints{};
+    size_t nLabels{};
 
 public:
-    explicit Dataset(const std::string& path) {
+    explicit Dataset(const std::string &path) {
         std::ifstream file(path);
 
         if (!file.is_open()) {
@@ -34,6 +36,15 @@ public:
             file >> this->points[index];
             this->points[index].setId((int) index);
         }
+
+        file >> this->nLabels;
+
+        this->labels = (size_t *) malloc(nPoints * sizeof(size_t));
+
+        for (size_t index = 0; index < this->nPoints; ++index) {
+            file >> this->labels[index];
+        }
+
     }
 
     [[nodiscard]] size_t getNPoints() const {
@@ -42,6 +53,14 @@ public:
 
     [[nodiscard]] Point *getPoints() const {
         return points;
+    }
+
+    [[nodiscard]] size_t *getLabels() const {
+        return labels;
+    }
+
+    [[nodiscard]] size_t getNLabels() const {
+        return nLabels;
     }
 
 };
