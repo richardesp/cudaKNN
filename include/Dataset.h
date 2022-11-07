@@ -15,7 +15,6 @@
 class Dataset {
 private:
     Point *points;
-    size_t *labels;
     size_t nPoints{};
     size_t nLabels{};
 
@@ -39,10 +38,8 @@ public:
 
         file >> this->nLabels;
 
-        this->labels = (size_t *) malloc(nPoints * sizeof(size_t));
-
         for (size_t index = 0; index < this->nPoints; ++index) {
-            file >> this->labels[index];
+            file >> this->points[index].label;
         }
 
     }
@@ -53,10 +50,6 @@ public:
 
     [[nodiscard]] Point *getPoints() const {
         return points;
-    }
-
-    [[nodiscard]] size_t *getLabels() const {
-        return labels;
     }
 
     [[nodiscard]] size_t getNLabels() const {

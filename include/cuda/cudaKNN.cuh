@@ -16,19 +16,14 @@ namespace knn {
     __device__ void selection_sort(double *data, Point *points, int left, int right) {
         for (int i = left; i <= right; ++i) {
             double min_val = data[i];
-            Point min_point = points[i];
             int min_idx = i;
-            int min_idx_point = i;
 
             // Find the smallest value in the range [left, right].
             for (int j = i + 1; j <= right; ++j) {
                 double val_j = data[j];
-                Point val_j_point = points[j];
                 if (val_j < min_val) {
                     min_idx = j;
                     min_val = val_j;
-                    min_idx_point = j;
-                    min_point = val_j_point;
                 }
             }
 
@@ -36,8 +31,6 @@ namespace knn {
             if (i != min_idx) {
                 data[min_idx] = data[i];
                 data[i] = min_val;
-                points[min_idx_point] = points[i];
-                points[i] = min_point;
             }
         }
     }
@@ -162,6 +155,7 @@ namespace knn {
                     distances[threadIndex] = EUCLIDEAN_DISTANCE(points[threadIndex].x, points[threadIndex].y,
                                                                 points[threadIndex].z, queryPoint->x, queryPoint->y,
                                                                 queryPoint->z);
+                    points[threadIndex].distance = distances[threadIndex];
 
                     break;
                 case MANHATTAN:
@@ -172,20 +166,39 @@ namespace knn {
                     distances[threadIndex] = EUCLIDEAN_DISTANCE(points[threadIndex].x, points[threadIndex].y,
                                                                 points[threadIndex].z, 0.0,
                                                                 0.0, 0.0);
+                    points[threadIndex].distance = distances[threadIndex];
             }
         }
     }
 
-    __device__ void computeFrequencies(Label *frequencyLabels, const size_t *k) {
+    __device__ void
+    findKBests(double *distances, Point *points, const size_t *totalPoints, const size_t *k, Label *frequencyLabels,
+               const size_t *totalLabels) {
         size_t threadIndex = threadIdx.x + blockIdx.x * blockDim.x;
 
-        if (threadIndex < *k) {
-            frequencyLabels[threadIndex].frequency++;
+        bool isBest = false;
+        for (size_t i = 0; i < *k; i++) {
+            printf("Thread %d: %f vs %f\n", threadIndex, points[threadIndex].distance, distances[i]);
+            if (points[threadIndex].distance <= distances[i]) {
+                isBest = true;
+            }
         }
+
+        // If the index is greater than the total points, we are out of bounds
+        if (threadIndex < *totalPoints and isBest) {
+            printf("Thread %d is best\n", threadIndex);
+            for (size_t i = 0; i < *totalLabels; ++i) {
+                if (points[threadIndex].label == frequencyLabels[i].label) {
+                    atomicAdd(&frequencyLabels[i].frequency, 1);
+                    return;
+                }
+            }
+        }
+
     }
 
     __global__ void
-    predict(Point *points, size_t *labels, const size_t *totalLabels, const size_t *totalPoints, const size_t *k,
+    predict(Point *points, const size_t *totalLabels, const size_t *totalPoints, const size_t *k,
             DistanceType *distanceType,
             double *distances,
             Point *queryPoint, Label *frequencyLabels, Lock lock) {
@@ -196,6 +209,8 @@ namespace knn {
         cdp_simple_quicksort<<<1, 1>>>(distances, points, 0, *totalPoints - 1, 0);
         __syncthreads();
 
-
+        // Once we have the distances computed, we're going to compute to find the k best points with these distances
+        findKBests(distances, points, totalPoints, k, frequencyLabels, totalLabels);
+        __syncthreads();
     }
 }

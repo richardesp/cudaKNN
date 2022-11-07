@@ -8,7 +8,7 @@
 class Label {
 public:
     size_t label;
-    size_t frequency;
+    int frequency;
 };
 
 #endif //CUDAKNN_LABEL_H

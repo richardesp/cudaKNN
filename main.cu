@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 
     size_t *host_k = (size_t *) malloc(sizeof(size_t));
     size_t *dev_k = nullptr;
-    *host_k = 5;
+    *host_k = 3;
 
     Dataset dataset(argv[1]);
 
@@ -90,14 +90,22 @@ int main(int argc, char **argv) {
     Point *host_points = dataset.getPoints();
     Point *dev_points = nullptr;
 
-    size_t *host_labels = dataset.getLabels();
-    size_t *dev_labels = nullptr;
+    // N labels to predict
+    Label *host_labels = (Label *) malloc(sizeof(Label) * *host_totalLabels);
+    Label *dev_labels = nullptr;
 
     fprintf(stdout, "Total points: %ld.\nResulting points array for training:\n", *host_totalPoints);
     for (size_t i = 0; i < *host_totalPoints; ++i) {
         fprintf(stdout, "%zu: %f %f %f. Label: %zu\n", host_points[i].getId(), host_points[i].getX(),
                 host_points[i].getY(),
-                host_points[i].getZ(), host_labels[i]);
+                host_points[i].getZ(), host_points[i].getLabel());
+    }
+
+    fprintf(stdout, "Total labels to predict: \n");
+    for (size_t i = 0; i < *host_totalLabels; ++i) {
+        host_labels[i].label = i;
+        host_labels[i].frequency = 0;
+        fprintf(stdout, "%zu: %d.\n", host_labels[i].label, host_labels[i].frequency);
     }
 
     dim3 gpuBlocks(TOTAL_BLOCKS, 1, 1);
@@ -108,6 +116,14 @@ int main(int argc, char **argv) {
 
     // Allocating the points in the GPU
     cudaStatus = cudaMalloc((void **) &dev_points, *host_totalPoints * sizeof(Point));
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Allocating the labels in the GPU
+    cudaStatus = cudaMalloc((void **) &dev_labels, *host_totalLabels * sizeof(Label));
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -138,9 +154,6 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    // Allocating the labels in the GPU
-    cudaStatus = cudaMalloc((void **) &dev_labels, *host_totalPoints * sizeof(size_t));
-
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
         return EXIT_FAILURE;
@@ -156,14 +169,6 @@ int main(int argc, char **argv) {
 
     // Copying the points to the GPU
     cudaStatus = cudaMemcpy(dev_points, host_points, *host_totalPoints * sizeof(Point), cudaMemcpyHostToDevice);
-
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
-        return EXIT_FAILURE;
-    }
-
-    // Copying the labels to the GPU
-    cudaStatus = cudaMemcpy(dev_labels, host_labels, *host_totalPoints * sizeof(size_t), cudaMemcpyHostToDevice);
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -194,6 +199,14 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    // Copying the labels to the GPU
+    cudaStatus = cudaMemcpy(dev_labels, host_labels, *host_totalLabels * sizeof(Label), cudaMemcpyHostToDevice);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
     // Copying the K to the GPU
     cudaStatus = cudaMemcpy(dev_k, host_k, sizeof(size_t), cudaMemcpyHostToDevice);
 
@@ -216,9 +229,9 @@ int main(int argc, char **argv) {
     Point *host_queryPoint = (Point *) malloc(sizeof(Point));
     Point *dev_queryPoint = nullptr;
 
-    host_queryPoint->x = 3.0;
-    host_queryPoint->y = 4.0;
-    host_queryPoint->z = 5.0;
+    host_queryPoint->x = 22.5;
+    host_queryPoint->y = 70.0;
+    host_queryPoint->z = 0.0;
 
     // Allocating the query point in the GPU
     cudaStatus = cudaMalloc((void **) &dev_queryPoint, sizeof(Point));
@@ -235,28 +248,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
         return EXIT_FAILURE;
     }
-
-    Label *host_frequencyLabels = (Label *) malloc(*host_totalLabels * sizeof(Label));
-
-    // Initialize the frequency labels
-    for (size_t i = 0; i < *host_totalLabels; i++) {
-        host_frequencyLabels[i].label = i;
-        host_frequencyLabels[i].frequency = 0;
-    }
-
-    // Shared flattened matrix for count the frequency of each label
-    Label *dev_frequencyLabels = nullptr;
-    cudaMalloc((void **) &dev_frequencyLabels, *host_k * sizeof(Label));
-
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
-        return EXIT_FAILURE;
-    }
-
-    // Copying the frequency labels to the GPU
-
-    cudaStatus = cudaMemcpy(dev_frequencyLabels, host_frequencyLabels, *host_k * sizeof(Label),
-                            cudaMemcpyHostToDevice);
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -275,14 +266,14 @@ int main(int argc, char **argv) {
 
     // Starting the kernel
     cudaEventRecord(start);
-    knn::predict<<<*host_totalPoints, 1>>>(dev_points, dev_labels, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
-            dev_queryPoint, dev_frequencyLabels, lock);
+    knn::predict<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
+            dev_queryPoint, dev_labels, lock);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 
     float miliseconds = 0;
     cudaEventElapsedTime(&miliseconds, start, stop);
-    printf("Kernel finished. Elapsed time: %f ms\n",miliseconds);
+    printf("Kernel finished. Elapsed time: %f ms\n", miliseconds);
     fprintf(stdout, "################################################\n");
 
     // Memcpy the distances to the host
@@ -301,7 +292,23 @@ int main(int argc, char **argv) {
     // Printing the points
     fprintf(stdout, "Points:\n");
     for (size_t i = 0; i < *host_totalPoints; ++i) {
-        fprintf(stdout, "%zu: (%f, %f, %f)\n", i, host_points[i].x, host_points[i].y, host_points[i].z);
+        fprintf(stdout, "%zu: (%f, %f, %f) --> Label: %zu. Distance to queryPoint: %f\n", i, host_points[i].x,
+                host_points[i].y, host_points[i].z,
+                host_points[i].label, host_points[i].distance);
+    }
+
+    // Memcpy the labels to the host
+    cudaStatus = cudaMemcpy(host_labels, dev_labels, *host_totalLabels * sizeof(Label), cudaMemcpyDeviceToHost);
+
+    if (cudaStatus != cudaSuccess) {
+        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
+        return EXIT_FAILURE;
+    }
+
+    // Printing the labels
+    fprintf(stdout, "Labels:\n");
+    for (size_t i = 0; i < *host_totalLabels; ++i) {
+        fprintf(stdout, "%zu: %zu\n", i, host_labels[i].label);
     }
 
     return EXIT_SUCCESS;

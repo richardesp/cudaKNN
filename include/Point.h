@@ -26,10 +26,14 @@ public:
     double x;
     double y;
     double z;
+    size_t label;
+    double distance;
 
-    Point(size_t id, double x, double y, double z) : id(id), x(x), y(y), z(z), distanceType(EUCLIDEAN) {}
+    Point(size_t id, double x, double y, double z, size_t label) : id(id), x(x), y(y), z(z), label(label),
+                                                                   distance(0.0),
+                                                                   distanceType(EUCLIDEAN) {}
 
-    Point() : id(-1), x(0), y(0), z(0) {}
+    Point() : id(-1), x(0), y(0), z(0), label(0), distance(0.0), distanceType(EUCLIDEAN) {}
 
     [[nodiscard]] double computeDistance(const Point &p, DistanceType type) const {
 
@@ -67,6 +71,10 @@ public:
 
     [[nodiscard]] double getZ() const {
         return z;
+    }
+
+    [[nodiscard]] size_t getLabel() const {
+        return label;
     }
 
     void setId(int id_) { this->id = id_; }
