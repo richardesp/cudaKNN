@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.23)
 project(cudaKNN CUDA)
 
-set(CMAKE_CUDA_STANDARD 23)
+set(CMAKE_CUDA_STANDARD 11)
 
 add_executable(cudaKNN main.cu include/Dataset.h include/cuda/Lock.h include/Point.h include/Label.h)
 
