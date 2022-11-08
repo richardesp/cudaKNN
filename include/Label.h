@@ -9,6 +9,10 @@ class Label {
 public:
     size_t label;
     int frequency;
+
+    __host__ __device__ bool operator<(const Label &l) const {
+        return frequency < l.frequency;
+    }
 };
 
 #endif //CUDAKNN_LABEL_H

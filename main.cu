@@ -103,9 +103,9 @@ int main(int argc, char **argv) {
 
     fprintf(stdout, "Total labels to predict: \n");
     for (size_t i = 0; i < *host_totalLabels; ++i) {
-        host_labels[i].label = i;
         host_labels[i].frequency = 0;
-        fprintf(stdout, "%zu: %d.\n", host_labels[i].label, host_labels[i].frequency);
+        host_labels[i].label = i;
+        fprintf(stdout, "%zu: %d.\n", i, host_labels[i].frequency);
     }
 
     dim3 gpuBlocks(TOTAL_BLOCKS, 1, 1);
@@ -229,8 +229,8 @@ int main(int argc, char **argv) {
     Point *host_queryPoint = (Point *) malloc(sizeof(Point));
     Point *dev_queryPoint = nullptr;
 
-    host_queryPoint->x = 22.5;
-    host_queryPoint->y = 70.0;
+    host_queryPoint->x = 2.5;
+    host_queryPoint->y = 7.0;
     host_queryPoint->z = 0.0;
 
     // Allocating the query point in the GPU
@@ -264,10 +264,38 @@ int main(int argc, char **argv) {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
+    Label *predictedLabel = (Label *) malloc(sizeof(Label));
+
     // Starting the kernel
     cudaEventRecord(start);
     knn::predict<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
             dev_queryPoint, dev_labels, lock);
+    thrust::host_vector<NodeThrust> host_nodesVector(*host_totalPoints);
+
+    // Memcpy the points array to the host
+    cudaMemcpy(host_points, dev_points, *host_totalPoints * sizeof(Point), cudaMemcpyDeviceToHost);
+
+    for (size_t index = 0; index < *host_totalPoints; index++) {
+        host_nodesVector[index].x = host_points[index].x;
+        host_nodesVector[index].y = host_points[index].y;
+        host_nodesVector[index].z = host_points[index].z;
+        host_nodesVector[index].label = host_points[index].label;
+        host_nodesVector[index].distance = host_points[index].distance;
+    }
+
+    thrust::sort(host_nodesVector.begin(), host_nodesVector.end());
+
+    for (size_t index = 0; index < *host_k; ++index) {
+        for (size_t label = 0; label < *host_totalLabels; ++label) {
+            if (host_nodesVector[index].label == label) {
+                host_labels[label].frequency = host_labels[label].frequency + 1;
+                continue;
+            }
+        }
+    }
+
+    predictedLabel = thrust::max_element(host_labels, host_labels + *host_totalLabels);
+
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 
@@ -276,40 +304,17 @@ int main(int argc, char **argv) {
     printf("Kernel finished. Elapsed time: %f ms\n", miliseconds);
     fprintf(stdout, "################################################\n");
 
-    // Memcpy the distances to the host
-    double *host_distances = (double *) malloc(*host_totalPoints * sizeof(double));
-    cudaMemcpy(host_distances, dev_distances, *host_totalPoints * sizeof(double), cudaMemcpyDeviceToHost);
-
-    // Memcpy the points array to the host
-    cudaMemcpy(host_points, dev_points, *host_totalPoints * sizeof(Point), cudaMemcpyDeviceToHost);
-
-    // Printing the distances
-    fprintf(stdout, "Distances:\n");
-    for (size_t i = 0; i < *host_totalPoints; ++i) {
-        fprintf(stdout, "%zu: %f\n", i, host_distances[i]);
-    }
-
     // Printing the points
+    /*
     fprintf(stdout, "Points:\n");
     for (size_t i = 0; i < *host_totalPoints; ++i) {
-        fprintf(stdout, "%zu: (%f, %f, %f) --> Label: %zu. Distance to queryPoint: %f\n", i, host_points[i].x,
-                host_points[i].y, host_points[i].z,
-                host_points[i].label, host_points[i].distance);
+        fprintf(stdout, "%zu: (%f, %f, %f) --> Label: %zu. Distance to queryPoint: %f\n", i, host_nodesVector[i].x,
+                host_nodesVector[i].y, host_nodesVector[i].z, host_nodesVector[i].label, host_nodesVector[i].distance);
     }
-
-    // Memcpy the labels to the host
-    cudaStatus = cudaMemcpy(host_labels, dev_labels, *host_totalLabels * sizeof(Label), cudaMemcpyDeviceToHost);
-
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(cudaStatus));
-        return EXIT_FAILURE;
-    }
+     */
 
     // Printing the labels
-    fprintf(stdout, "Labels:\n");
-    for (size_t i = 0; i < *host_totalLabels; ++i) {
-        fprintf(stdout, "%zu: %zu\n", i, host_labels[i].label);
-    }
+    printf("Predicted label: %zu\n", predictedLabel->label);
 
     return EXIT_SUCCESS;
 }

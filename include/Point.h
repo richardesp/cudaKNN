@@ -5,6 +5,20 @@
 #ifndef CUDAKNN_POINT_H
 #define CUDAKNN_POINT_H
 
+typedef struct NodeThrust {
+    double x;
+    double y;
+    double z;
+    int id;
+    size_t label;
+    double distance;
+
+    __host__ __device__ bool operator<(const NodeThrust &p) const {
+        return distance < p.distance;
+    }
+
+} NodeThrust;
+
 struct GPUPoint {
     float x;
     float y;
@@ -34,6 +48,10 @@ public:
                                                                    distanceType(EUCLIDEAN) {}
 
     Point() : id(-1), x(0), y(0), z(0), label(0), distance(0.0), distanceType(EUCLIDEAN) {}
+
+    __host__ __device__ bool operator<(const Point &p) const {
+        return distance < p.distance;
+    }
 
     [[nodiscard]] double computeDistance(const Point &p, DistanceType type) const {
 

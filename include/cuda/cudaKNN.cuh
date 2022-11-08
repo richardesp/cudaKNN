@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 #include <thrust/sort.h>
+#include <thrust/host_vector.h>
 #include "../Label.h"
 
 #define MAX_GRID_DIM_X 2147483647
@@ -31,6 +32,9 @@ namespace knn {
             if (i != min_idx) {
                 data[min_idx] = data[i];
                 data[i] = min_val;
+                Point temp = points[i];
+                points[i] = points[min_idx];
+                points[min_idx] = temp;
             }
         }
     }
@@ -171,29 +175,9 @@ namespace knn {
         }
     }
 
-    __device__ void
+    __host__ void
     findKBests(double *distances, Point *points, const size_t *totalPoints, const size_t *k, Label *frequencyLabels,
                const size_t *totalLabels) {
-        size_t threadIndex = threadIdx.x + blockIdx.x * blockDim.x;
-
-        bool isBest = false;
-        for (size_t i = 0; i < *k; i++) {
-            printf("Thread %d: %f vs %f\n", threadIndex, points[threadIndex].distance, distances[i]);
-            if (points[threadIndex].distance <= distances[i]) {
-                isBest = true;
-            }
-        }
-
-        // If the index is greater than the total points, we are out of bounds
-        if (threadIndex < *totalPoints and isBest) {
-            printf("Thread %d is best\n", threadIndex);
-            for (size_t i = 0; i < *totalLabels; ++i) {
-                if (points[threadIndex].label == frequencyLabels[i].label) {
-                    atomicAdd(&frequencyLabels[i].frequency, 1);
-                    return;
-                }
-            }
-        }
 
     }
 
@@ -205,12 +189,6 @@ namespace knn {
 
 
         computeDistance(points, totalPoints, k, distanceType, distances, queryPoint);
-        __syncthreads();
-        cdp_simple_quicksort<<<1, 1>>>(distances, points, 0, *totalPoints - 1, 0);
-        __syncthreads();
-
-        // Once we have the distances computed, we're going to compute to find the k best points with these distances
-        findKBests(distances, points, totalPoints, k, frequencyLabels, totalLabels);
         __syncthreads();
     }
 }
