@@ -51,7 +51,7 @@ build cmake_object_order_depends_target_cudaKNN: phony || CMakeFiles/cudaKNN.dir
 
 build CMakeFiles/cudaKNN.dir/main.cu.o: CUDA_COMPILER__cudaKNN_Debug /home/ricardo/CLionProjects/cudaKNN/main.cu || cmake_object_order_depends_target_cudaKNN
   DEP_FILE = CMakeFiles/cudaKNN.dir/main.cu.o.d
-  FLAGS = -g --generate-code=arch=compute_52,code=[compute_52,sm_52] -std=c++17
+  FLAGS = -g --generate-code=arch=compute_52,code=[compute_52,sm_52] -std=c++11
   OBJECT_DIR = CMakeFiles/cudaKNN.dir
   OBJECT_FILE_DIR = CMakeFiles/cudaKNN.dir
 

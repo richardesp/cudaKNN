@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 #include <thrust/sort.h>
 #include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
 #include "../Label.h"
 
 #define MAX_GRID_DIM_X 2147483647
@@ -18,13 +19,18 @@ namespace knn {
         for (int i = left; i <= right; ++i) {
             double min_val = data[i];
             int min_idx = i;
+            Point min_point = points[i];
+            int min_point_idx = i;
 
             // Find the smallest value in the range [left, right].
             for (int j = i + 1; j <= right; ++j) {
                 double val_j = data[j];
+                Point val_point_j = points[j];
                 if (val_j < min_val) {
                     min_idx = j;
                     min_val = val_j;
+                    min_point_idx = j;
+                    min_point = val_point_j;
                 }
             }
 
@@ -32,9 +38,8 @@ namespace knn {
             if (i != min_idx) {
                 data[min_idx] = data[i];
                 data[i] = min_val;
-                Point temp = points[i];
-                points[i] = points[min_idx];
-                points[min_idx] = temp;
+                points[min_idx] = points[i];
+                points[i] = min_point;
             }
         }
     }

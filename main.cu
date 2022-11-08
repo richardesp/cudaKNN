@@ -270,6 +270,10 @@ int main(int argc, char **argv) {
     cudaEventRecord(start);
     knn::predict<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
             dev_queryPoint, dev_labels, lock);
+
+    /*knn::cdp_simple_quicksort<<<*host_totalPoints, 1>>>(dev_distances, dev_points, 0,
+            *host_totalPoints - 1, 1); REQUIRED */
+
     thrust::host_vector<NodeThrust> host_nodesVector(*host_totalPoints);
 
     // Memcpy the points array to the host
@@ -283,7 +287,11 @@ int main(int argc, char **argv) {
         host_nodesVector[index].distance = host_points[index].distance;
     }
 
-    thrust::sort(host_nodesVector.begin(), host_nodesVector.end());
+    thrust::device_vector<NodeThrust> dev_nodesVector = host_nodesVector;
+
+    thrust::sort(dev_nodesVector.begin(), dev_nodesVector.end());
+
+    host_nodesVector = dev_nodesVector;
 
     for (size_t index = 0; index < *host_k; ++index) {
         for (size_t label = 0; label < *host_totalLabels; ++label) {
@@ -295,7 +303,6 @@ int main(int argc, char **argv) {
     }
 
     predictedLabel = thrust::max_element(host_labels, host_labels + *host_totalLabels);
-
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 
