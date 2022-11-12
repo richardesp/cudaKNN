@@ -268,8 +268,8 @@ int main(int argc, char **argv) {
 
     // Starting the kernel
     cudaEventRecord(start);
-    knn::predict<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
-            dev_queryPoint, dev_labels, lock);
+    knn::predictOnePoint<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
+            dev_queryPoint, dev_labels);
 
     /*knn::cdp_simple_quicksort<<<*host_totalPoints, 1>>>(dev_distances, dev_points, 0,
             *host_totalPoints - 1, 1); REQUIRED */

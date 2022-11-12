@@ -55,6 +55,12 @@ build CMakeFiles/cudaKNN.dir/main.cu.o: CUDA_COMPILER__cudaKNN_Debug /home/ricar
   OBJECT_DIR = CMakeFiles/cudaKNN.dir
   OBJECT_FILE_DIR = CMakeFiles/cudaKNN.dir
 
+build CMakeFiles/cudaKNN.dir/src/cuda/cudaKNN.cu.o: CUDA_COMPILER__cudaKNN_Debug /home/ricardo/CLionProjects/cudaKNN/src/cuda/cudaKNN.cu || cmake_object_order_depends_target_cudaKNN
+  DEP_FILE = CMakeFiles/cudaKNN.dir/src/cuda/cudaKNN.cu.o.d
+  FLAGS = -g --generate-code=arch=compute_52,code=[compute_52,sm_52] -std=c++11
+  OBJECT_DIR = CMakeFiles/cudaKNN.dir
+  OBJECT_FILE_DIR = CMakeFiles/cudaKNN.dir/src/cuda
+
 
 # =============================================================================
 # Device Link build statements for EXECUTABLE target cudaKNN
@@ -63,7 +69,7 @@ build CMakeFiles/cudaKNN.dir/main.cu.o: CUDA_COMPILER__cudaKNN_Debug /home/ricar
 #############################################
 # Link the executable CMakeFiles/cudaKNN.dir/cmake_device_link.o
 
-build CMakeFiles/cudaKNN.dir/cmake_device_link.o: CUDA_EXECUTABLE_DEVICE_LINKER__cudaKNN_Debug CMakeFiles/cudaKNN.dir/main.cu.o
+build CMakeFiles/cudaKNN.dir/cmake_device_link.o: CUDA_EXECUTABLE_DEVICE_LINKER__cudaKNN_Debug CMakeFiles/cudaKNN.dir/main.cu.o CMakeFiles/cudaKNN.dir/src/cuda/cudaKNN.cu.o
   LANGUAGE_COMPILE_FLAGS = -g --generate-code=arch=compute_52,code=[compute_52,sm_52]
   LINK_LIBRARIES = -lcudadevrt -lcudart_static -lrt -lpthread -ldl
   OBJECT_DIR = CMakeFiles/cudaKNN.dir
@@ -76,7 +82,7 @@ build CMakeFiles/cudaKNN.dir/cmake_device_link.o: CUDA_EXECUTABLE_DEVICE_LINKER_
 #############################################
 # Link the executable cudaKNN
 
-build cudaKNN: CUDA_EXECUTABLE_LINKER__cudaKNN_Debug CMakeFiles/cudaKNN.dir/main.cu.o CMakeFiles/cudaKNN.dir/cmake_device_link.o
+build cudaKNN: CUDA_EXECUTABLE_LINKER__cudaKNN_Debug CMakeFiles/cudaKNN.dir/main.cu.o CMakeFiles/cudaKNN.dir/src/cuda/cudaKNN.cu.o CMakeFiles/cudaKNN.dir/cmake_device_link.o
   FLAGS = -g --generate-code=arch=compute_52,code=[compute_52,sm_52]
   LINK_LIBRARIES = -lcudadevrt  -lcudart_static  -lrt  -lpthread  -ldl
   OBJECT_DIR = CMakeFiles/cudaKNN.dir
