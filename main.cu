@@ -225,16 +225,21 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    Dataset evaluationDataset(argv[2]);
+
+    size_t totalEvaluationPoints = evaluationDataset.getNPoints();
+
+    // The labels must be the same as the training dataset
+    assert (evaluationDataset.getNLabels() == *host_totalLabels);
+
     // Creating the query point
-    Point *host_queryPoint = (Point *) malloc(sizeof(Point));
+    Point *host_queryPoint = (Point *) malloc(sizeof(Point) * totalEvaluationPoints);
     Point *dev_queryPoint = nullptr;
 
-    host_queryPoint->x = 2.5;
-    host_queryPoint->y = 7.0;
-    host_queryPoint->z = 0.0;
+    host_queryPoint = evaluationDataset.getPoints();
 
     // Allocating the query point in the GPU
-    cudaStatus = cudaMalloc((void **) &dev_queryPoint, sizeof(Point));
+    cudaStatus = cudaMalloc((void **) &dev_queryPoint, sizeof(Point) * totalEvaluationPoints);
 
     if (cudaStatus != cudaSuccess) {
         fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(cudaStatus));
@@ -264,45 +269,56 @@ int main(int argc, char **argv) {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    Label *predictedLabel = (Label *) malloc(sizeof(Label));
+    Label *predictedLabel = (Label *) malloc(sizeof(Label) * totalEvaluationPoints);
 
     // Starting the kernel
     cudaEventRecord(start);
-    knn::predictOnePoint<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
-            dev_queryPoint, dev_labels);
 
-    /*knn::cdp_simple_quicksort<<<*host_totalPoints, 1>>>(dev_distances, dev_points, 0,
-            *host_totalPoints - 1, 1); REQUIRED */
+    for (size_t i = 0; i < totalEvaluationPoints; ++i) {
 
-    thrust::host_vector<NodeThrust> host_nodesVector(*host_totalPoints);
+        cudaMemset((void **) &dev_distances, 0, *host_totalPoints * sizeof(double));
+        cudaMemset((void **) dev_labels, 0, *host_totalLabels * sizeof(Label));
+        memset(host_labels, 0, *host_totalLabels * sizeof(Label));
 
-    // Memcpy the points array to the host
-    cudaMemcpy(host_points, dev_points, *host_totalPoints * sizeof(Point), cudaMemcpyDeviceToHost);
+        knn::predictOnePoint<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
+                dev_queryPoint + i, dev_labels);
 
-    for (size_t index = 0; index < *host_totalPoints; index++) {
-        host_nodesVector[index].x = host_points[index].x;
-        host_nodesVector[index].y = host_points[index].y;
-        host_nodesVector[index].z = host_points[index].z;
-        host_nodesVector[index].label = host_points[index].label;
-        host_nodesVector[index].distance = host_points[index].distance;
-    }
+        /*knn::cdp_simple_quicksort<<<*host_totalPoints, 1>>>(dev_distances, dev_points, 0,
+                *host_totalPoints - 1, 1); REQUIRED */
 
-    thrust::device_vector<NodeThrust> dev_nodesVector = host_nodesVector;
+        thrust::host_vector<NodeThrust> host_nodesVector(*host_totalPoints);
 
-    thrust::sort(dev_nodesVector.begin(), dev_nodesVector.end());
+        // Memcpy the points array to the host
+        cudaMemcpy(host_points, dev_points, *host_totalPoints * sizeof(Point), cudaMemcpyDeviceToHost);
 
-    host_nodesVector = dev_nodesVector;
+        for (size_t index = 0; index < *host_totalPoints; index++) {
+            host_nodesVector[index].x = host_points[index].x;
+            host_nodesVector[index].y = host_points[index].y;
+            host_nodesVector[index].z = host_points[index].z;
+            host_nodesVector[index].label = host_points[index].label;
+            host_nodesVector[index].distance = host_points[index].distance;
+        }
 
-    for (size_t index = 0; index < *host_k; ++index) {
-        for (size_t label = 0; label < *host_totalLabels; ++label) {
-            if (host_nodesVector[index].label == label) {
-                host_labels[label].frequency = host_labels[label].frequency + 1;
-                continue;
+        thrust::device_vector<NodeThrust> dev_nodesVector = host_nodesVector;
+
+        thrust::sort(dev_nodesVector.begin(), dev_nodesVector.end());
+
+        host_nodesVector = dev_nodesVector;
+
+        for (size_t index = 0; index < *host_k; ++index) {
+            for (size_t label = 0; label < *host_totalLabels; ++label) {
+                if (host_nodesVector[index].label == label) {
+                    host_labels[label].label = label;
+                    host_labels[label].frequency = host_labels[label].frequency + 1;
+                    continue;
+                }
             }
         }
+
+        auto result = thrust::max_element(host_labels, host_labels + *host_totalLabels);
+        predictedLabel[i] = *result;
     }
 
-    predictedLabel = thrust::max_element(host_labels, host_labels + *host_totalLabels);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 
@@ -321,7 +337,12 @@ int main(int argc, char **argv) {
      */
 
     // Printing the labels
-    printf("Predicted label: %zu\n", predictedLabel->label);
+    /*fprintf(stdout, "Predictions:\n");
+    for (size_t i = 0; i < totalEvaluationPoints; ++i) {
+        fprintf(stdout, "%zu: %zu\n", i, predictedLabel[i].label);
+    }*/
+
+    printf("Done!\n");
 
     return EXIT_SUCCESS;
 }
