@@ -40,4 +40,11 @@ namespace knn {
                     DistanceType *distanceType,
                     double *distances,
                     Point *queryPoint, Label *frequencyLabels);
+
+    __global__ void
+    predictAllPoints(Point *points, const size_t *totalLabels, const size_t *totalPoints,
+                     const size_t *totalQueriesPoints, const size_t *k,
+                     DistanceType *distanceType,
+                     double *distances,
+                     Point *queriesPoints, Label *frequencyLabels);
 }

@@ -5,10 +5,91 @@
 #include "include/cuda/cudaKNN.cuh"
 #include "include/Point.h"
 #include "include/Label.h"
+#include <pthread.h>
 
+struct Data {
+    size_t *id; // Index of query point i-th
+    Point *dev_points;
+    Label *dev_labels;
+    size_t *dev_totalLabels;
+    size_t *dev_totalPoints;
+    size_t *host_totalPoints;
+    size_t *dev_k;
+    DistanceType *dev_distanceType;
+    Point *dev_queryPoint;
+    Label *dev_frequencyLabels;
+    Label *host_predictedLabels; // Array of predictions
+} typedef Data;
+
+void *multiEvaluationPoints(void *args) {
+    Data *data = (Data *) args;
+
+    Point *dev_points = data->dev_points;
+    Label *dev_labels = data->dev_labels;
+    size_t *dev_totalLabels = data->dev_totalLabels;
+    size_t *dev_totalPoints = data->dev_totalPoints;
+    size_t *host_totalPoints = data->host_totalPoints;
+    Label *host_predictedLabels = data->host_predictedLabels;
+    size_t *dev_k = data->dev_k;
+    DistanceType *dev_distanceType = data->dev_distanceType;
+    Point *dev_queryPoint = data->dev_queryPoint;
+    size_t *memoryId = data->id;
+
+    double *distances = (double *) malloc(sizeof(double) * *host_totalPoints);
+
+    knn::predictOnePoint<<<dim3(*dev_totalPoints, 1,
+                                1), 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, distances,
+            dev_queryPoint, dev_labels);
+
+    thrust::host_vector<NodeThrust> host_nodesVector(*host_totalPoints);
+
+    Point *host_points = (Point *) malloc(sizeof(Point) * *host_totalPoints);
+
+    // Memcpy the points array to the host
+    cudaMemcpy(host_points, dev_points, *host_totalPoints * sizeof(Point), cudaMemcpyDeviceToHost);
+
+    for (size_t index = 0; index < *host_totalPoints; index++) {
+        host_nodesVector[index].x = host_points[index].x;
+        host_nodesVector[index].y = host_points[index].y;
+        host_nodesVector[index].z = host_points[index].z;
+        host_nodesVector[index].label = host_points[index].label;
+        host_nodesVector[index].distance = host_points[index].distance;
+    }
+
+    thrust::device_vector<NodeThrust> dev_nodesVector = host_nodesVector;
+
+    thrust::sort(dev_nodesVector.begin(), dev_nodesVector.end());
+
+    host_nodesVector = dev_nodesVector;
+
+    size_t *host_totalLabels = (size_t *) malloc(sizeof(size_t));
+    size_t *host_k = (size_t *) malloc(sizeof(size_t));
+
+    cudaMemcpy(host_totalLabels, dev_totalLabels, sizeof(size_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(host_k, dev_k, sizeof(size_t), cudaMemcpyDeviceToHost);
+
+    for (size_t index = 0; index < *host_k; ++index) {
+        for (size_t label = 0; label < *host_totalLabels; ++label) {
+            if (host_nodesVector[index].label == label) {
+                host_predictedLabels[label].label = label;
+                host_predictedLabels[label].frequency = host_predictedLabels[label].frequency + 1;
+                continue;
+            }
+        }
+    }
+
+    Label *result = thrust::max_element(host_predictedLabels, host_predictedLabels + *host_totalLabels);
+    host_predictedLabels[*memoryId] = *result;
+
+    return nullptr;
+}
 
 int main(int argc, char **argv) {
     int deviceCount = 0;
+
+    /*size_t nThreads = std::thread::hardware_concurrency();
+
+    printf("CPU available threads: %zu\n", nThreads);*/
 
     cudaGetDeviceCount(&deviceCount);
 
@@ -273,7 +354,6 @@ int main(int argc, char **argv) {
 
     // Starting the kernel
     cudaEventRecord(start);
-
     for (size_t i = 0; i < totalEvaluationPoints; ++i) {
 
         cudaMemset((void **) &dev_distances, 0, *host_totalPoints * sizeof(double));
@@ -284,7 +364,7 @@ int main(int argc, char **argv) {
                 dev_queryPoint + i, dev_labels);
 
         /*knn::cdp_simple_quicksort<<<*host_totalPoints, 1>>>(dev_distances, dev_points, 0,
-                *host_totalPoints - 1, 1); REQUIRED */
+                *host_totalPoints - 1, 1);*/
 
         thrust::host_vector<NodeThrust> host_nodesVector(*host_totalPoints);
 
@@ -315,7 +395,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        auto result = thrust::max_element(host_labels, host_labels + *host_totalLabels);
+        Label *result = thrust::max_element(host_labels, host_labels + *host_totalLabels);
         predictedLabel[i] = *result;
     }
 

@@ -16,7 +16,6 @@ knn::predict(Point *points, const size_t *totalLabels, const size_t *totalPoints
              Label *frequencyLabels, double *distances, Label *predictedLabels) {
 
     for (size_t index = 0; index < *totalEvaluationPoints; ++index) {
-        printf("DENTRO %d \n", index);
 
         knn::predictOnePoint<<<dim3(*totalPoints, 1,
                                     1), 1>>>(points, totalLabels, totalPoints, k, distanceType, distances,
@@ -230,4 +229,15 @@ __device__ void knn::selection_sort(double *data, Point *points, int left, int r
             points[i] = min_point;
         }
     }
+}
+
+__global__ void
+knn::predictAllPoints(Point *points, const size_t *totalLabels, const size_t *totalPoints,
+                      const size_t *totalQueriesPoints, const size_t *k,
+                      DistanceType *distanceType,
+                      double *distances,
+                      Point *queriesPoints, Label *frequencyLabels) {
+
+    //size_t threadIndexX = blockIdx.x * blockDim.x + threadIdx.x;
+    //size_t threadIndexY = blockIdx.y * blockDim.y + threadIdx.y;
 }
