@@ -175,18 +175,18 @@ int main(int argc, char **argv) {
     Label *host_labels = (Label *) malloc(sizeof(Label) * *host_totalLabels);
     Label *dev_labels = nullptr;
 
-    fprintf(stdout, "Total points: %ld.\nResulting points array for training:\n", *host_totalPoints);
+    /*fprintf(stdout, "Total points: %ld.\nResulting points array for training:\n", *host_totalPoints);
     for (size_t i = 0; i < *host_totalPoints; ++i) {
         fprintf(stdout, "%zu: %f %f %f. Label: %zu\n", host_points[i].getId(), host_points[i].getX(),
                 host_points[i].getY(),
                 host_points[i].getZ(), host_points[i].getLabel());
-    }
+    }*/
 
-    fprintf(stdout, "Total labels to predict: \n");
+    //fprintf(stdout, "Total labels to predict: \n");
     for (size_t i = 0; i < *host_totalLabels; ++i) {
         host_labels[i].frequency = 0;
         host_labels[i].label = i;
-        fprintf(stdout, "%zu: %d.\n", i, host_labels[i].frequency);
+        //fprintf(stdout, "%zu: %d.\n", i, host_labels[i].frequency);
     }
 
     dim3 gpuBlocks(TOTAL_BLOCKS, 1, 1);
@@ -360,7 +360,7 @@ int main(int argc, char **argv) {
         cudaMemset((void **) dev_labels, 0, *host_totalLabels * sizeof(Label));
         memset(host_labels, 0, *host_totalLabels * sizeof(Label));
 
-        knn::predictOnePoint<<<*host_totalPoints, 1>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
+        knn::predictOnePoint<<<dim3(round(*host_totalPoints / MAX_THREAD_DIM_X) + 1, 1, 1), dim3(MAX_THREAD_DIM_X, 1, 1)>>>(dev_points, dev_totalLabels, dev_totalPoints, dev_k, dev_distanceType, dev_distances,
                 dev_queryPoint + i, dev_labels);
 
         /*knn::cdp_simple_quicksort<<<*host_totalPoints, 1>>>(dev_distances, dev_points, 0,
@@ -384,6 +384,11 @@ int main(int argc, char **argv) {
         thrust::sort(dev_nodesVector.begin(), dev_nodesVector.end());
 
         host_nodesVector = dev_nodesVector;
+
+        // Print host_nodesVector distances
+        for (size_t index = 0; index < 10; index++) {
+            printf("Distance: %f --> Label: %zu\n", host_nodesVector[index].distance, host_nodesVector[index].label);
+        }
 
         for (size_t index = 0; index < *host_k; ++index) {
             for (size_t label = 0; label < *host_totalLabels; ++label) {

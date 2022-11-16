@@ -7,6 +7,7 @@
 #include "Lock.h"
 
 #define MAX_GRID_DIM_X 2147483647
+#define MAX_THREAD_DIM_X 1024
 
 #define EUCLIDEAN_DISTANCE(x1, y1, z1, x2, y2, z2) sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2) + pow(z1 - z2, 2))
 
